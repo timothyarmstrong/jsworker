@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>JavaScript Image Filter Worker</title>
+    <style>
+      body {
+        background: #ddd;
+        padding: 10px;
+      }
+      #canvas {
+        border: 2px dashed #aaa;
+        display:block;
+        margin: 0 auto;
+      }
+      #canvas.over {
+        background: #ccc;
+      }
+      #options {
+        margin-top: 10px;
+        text-align: center;
+      }
+      #options input {
+        width: 40px;
+      }
+    </style>
+    <script id="worker" type="javascript/worker">
+      var filter = function(imageData, iterations) {
+        var data = imageData.data;
+        for (var j = 0; j < iterations; j++) {
+          for (var i = 0; i < data.length; i += 4) {
+              var num = Math.round(0.21 * data[i] + 0.71 * data[i+1] + 0.07 * data[i+2]);
+              data[i] = num;
+              data[i+1] = num;
+              data[i+2] = num;
+              data[i+3] = 205 + Math.random() * 50;
+          }
+        }
+      };
+      
+      self.onmessage = function(e) {
+        
+        filter(e.data.imagedata, e.data.iterations);
+        
+        self.postMessage({
+          'imagedata': e.data.imagedata,
+        });
+      }
+    </script>
+    <script>
+      
+      (function() {
+        
+        var filter = function(imageData, iterations) {
+          var data = imageData.data;
+          for (var j = 0; j < iterations; j++) {
+            for (var i = 0; i < data.length; i += 4) {
+                var num = Math.round(0.21 * data[i] + 0.71 * data[i+1] + 0.07 * data[i+2]);
+                data[i] = num;
+                data[i+1] = num;
+                data[i+2] = num;
+                data[i+3] = 205 + Math.random() * 50;
+            }
+          }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+          var canvas = document.getElementById('canvas');
+          var button = document.getElementById('filter');
+          
+          var HEIGHT = 408;
+          var WIDTH = 306;
+          
+          canvas.height = HEIGHT;
+          canvas.width = WIDTH;
+          
+          var c = canvas.getContext('2d');
+          
+          canvas.addEventListener('dragover', function() {
+            canvas.classList.add('over');
+          }, false);
+          
+          canvas.addEventListener('dragleave', function() {
+            canvas.classList.remove('over');
+          }, false);
+          
+          canvas.addEventListener('drop', function(e) {
+              e.preventDefault();
+              var reader = new FileReader();
+              reader.onload = function(e) {
+                  var dataURL = e.target.result;
+                  var i = new Image();
+                  i.onload = function() {
+                      c.drawImage(i, 0, 0, WIDTH, HEIGHT);
+                  }
+                  i.src = dataURL;
+              };
+              reader.readAsDataURL(e.dataTransfer.files[0]);
+          }, false);
+          
+          // Handler which doesn't use web workers.
+          var handler1 = function() {
+            var imageData = c.getImageData(0, 0, WIDTH, HEIGHT);
+            var iterations = document.getElementById('iterations').value || 100;
+            filter(imageData, iterations);
+            c.putImageData(imageData, 0, 0);
+          };
+          
+          // Handler which uses web workers.
+          var handler2 = function() {
+            var imageData = c.getImageData(0, 0, WIDTH, HEIGHT);
+            var iterations = document.getElementById('iterations').value || 100;
+            
+            var blob = new Blob([document.getElementById('worker').textContent]);
+            var worker = new Worker(window.webkitURL.createObjectURL(blob));
+            
+            worker.onmessage = function(e) {
+              c.putImageData(e.data.imagedata, 0, 0);
+            }
+            
+            worker.postMessage({
+              'imagedata': imageData,
+              'iterations': iterations
+            });
+            
+          };
+          
+          // Switch which handler to use to change between using workers and not.
+          button.addEventListener('click', handler1, false);
+          
+        }, false);
+      })();
+      
+    </script>
+  </head>
+  <body>
+    <canvas id="canvas">Canvas is not supported in your browser.</canvas>
+    <div id="options">
+      <input type="text" id="iterations" value="100" />
+      <button id="filter">Filter</button>
+    </div>
+  </body>
+</html>
